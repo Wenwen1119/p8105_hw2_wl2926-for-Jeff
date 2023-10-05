@@ -1,0 +1,157 @@
+---
+title: "p8105_hw2_wl2926"
+author: "Wenwen Li"
+date: 2023-10-03
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(dplyr)
+```
+
+
+#Problem 2
+
+##Part 1:Read and clean the Mr. Trash Wheel sheet
+
+```{r}
+###specify the sheet in the Excel file and to omit non-data entries (rows with notes / figures;   columns containing notes) using arguments in read_excel
+data = read_excel("data/202309 Trash Wheel Collection Data.xlsx", sheet = "Mr. Trash Wheel", range = "A2:N586")
+
+###omit rows that do not include dumpster-specific data
+data_TW <- data %>%
+  drop_na(Dumpster)
+
+##Print the cleaned data
+print(data)
+```
+
+
+##Part 2: Update the data to include a new homes_powered variable based on this calculation
+```{r}
+
+# Calculate homes powered based on the trash (in tonnes)
+data <- data %>%
+  rename(
+    trash_tonnes = `Weight (tons)`, 
+    homes_powered = `Homes Powered*` 
+   )
+# Each ton of trash equates to 500 kilowatts of electricity, and an average household uses 30 kilowatts per day
+data$homes_powered <- data$trash_tonnes * (500 / 30)  # Calculate homes powered
+
+# Print the updated data frame
+print(data)
+```
+
+
+##Part 3 Use a similar process to import, clean, and organize the data for Professor Trash Wheel and Gwynnda, and combine these with the Mr. Trash Wheel dataset to produce a single tidy dataset.
+```{r}
+###For Professor Trash Wheel:omit the irrelavent data
+data_df_prof = read_excel("data/202309 Trash Wheel Collection Data.xlsx", sheet = "Professor Trash Wheel", range = "A2:M108")
+
+###omit rows that do not include dumpster-specific data
+data_cl_df_prof<- data_df_prof %>%
+  drop_na(Dumpster)
+
+print(data_cl_df_prof)
+
+###For Gwynnda Trash Wheel:omit the irrelavent data
+data_df_Gwy = read_excel("data/202309 Trash Wheel Collection Data.xlsx", sheet = "Gwynnda Trash Wheel", range = "A2:L157")
+
+###omit rows that do not include dumpster-specific data
+data_cl_df_Gwy<- data_df_prof %>%
+  drop_na(Dumpster)
+
+print(data_cl_df_Gwy)
+```
+
+### Combine Datasets
+```{r}
+  # Convert the "Year" column to character in both datasets
+data_cl_df_Gwy <- mutate(data_cl_df_Gwy, Year = as.character(Year))
+data_cl_df_prof <- mutate(data_cl_df_prof, Year = as.character(Year))
+
+# Now, you should be able to combine the datasets without the type mismatch error
+combined_data <- bind_rows(data_cl_df_Gwy, data_cl_df_prof, data)
+print(combined_data) 
+```
+
+In Mr.Trash Wheel dataset there are **`r nrow(data)`** observations and **`r ncol(data)`** features.In combined dataset there are **`r nrow(combined_data)`** observations and **`r ncol(combined_data)`** features.For example, Varaible 'Dumpster' is the number of people dumbing the trash, and 'Weight' is the sum of the trashes.
+Based on the combined dataset, we got 796 observations.The total weight collected by Professor Trash Wheel is 216.26 tons;The total number of cigarette butts collected by Gwynnda is 16300 in July of 2021.
+
+#Problem 3
+##Import, clean, and tidy the dataset of baseline demographics.
+```{r}
+data_MCI = read_csv("data/MCI_baseline.csv",skip = 1)|>
+janitor::clean_names() 
+# Encoding 'sex' 'apoe4'as a factor
+data_MCI$sex <-factor(data_MCI$sex, levels = c(0, 1), labels = c("Female", "Male"))
+data_MCI$apoe4 <-factor(data_MCI$apoe4, levels = c(0, 1), labels = c("APOE4 noncarrier", "APOE4 carrier"))
+print(data_MCI)
+
+#remove any participants who do not meet the stated inclusion criteria (i.e. no MCI at baseline)
+filtered_data_MCI <- data_MCI[data_MCI$age_at_onset != ".", , drop = TRUE]
+
+mean1 =  mean(data_MCI$current_age, na.rm = TRUE)
+
+# Calculate the proportion of women who are APOE4 carriers
+total_women <- sum(data_MCI$sex == "Female")  # Total number of women (assuming 0 represents female)
+women_APOE4_carriers <- sum(data_MCI$sex == "Female" & data_MCI$apoe4 == "APOE4 carrier") 
+proportion = women_APOE4_carriers / total_women
+
+print(filtered_data_MCI)
+```
+
+
+Discuss important steps in the import process and relevant features of the dataset. How many participants were recruited, and of these how many develop MCI? What is the average baseline age? What proportion of women in the study are APOE4 carriers?
+When we try to import the dataset, we have to choose the correct format, and omit the columns and rows like figures, notes, description when we want to do a data analysis.
+There are **`r nrow(data_MCI)`** observations and **`r ncol(data_MCI)`** features. Only **`r nrow(filtered_data_MCI)`** develop MCI. The average baseline age should be **`mean1`** The proportion of women are APOE 4 carriers is **`proportion`**
+
+##Step 2
+```{r}
+mci_amyloid = read_csv("data/mci_amyloid.csv",skip = 1)|>
+janitor::clean_names()
+
+# Clean names
+mci_amyloid <- janitor::clean_names(mci_amyloid)
+long_amyloid<-pivot_longer(data = mci_amyloid,
+                          cols = "baseline", 
+                           names_to = "Timepoint", 
+                           values_to = "Biomarker_value") 
+long_amyloid[2:495,  ]
+
+# Print the tidied dataset
+head("long_amyloid")
+```
+We use "read_csv" to import the dataset, and first step should be clean and tidy the dataset. This dataset have long numrical data, so we could use the "pivot_longer()"to figure it out.There are **`r nrow(mci_amyloid)`** observations and **`r ncol(mci_amyloid)`** features.
+
+###Combine the demographic and biomarker datasets
+```{r}
+#rename the first column
+data_MCI<- data_MCI %>%
+  rename(study_id = id)
+print("Updated Dataset:")
+print(data_MCI)
+```
+
+```{r}
+x = data_MCI
+y = mci_amyloid
+merged_data <- left_join(x, y, by = "study_id")
+
+# Print the merged dataset
+print("Merged Dataset:")
+print(merged_data)
+file_path <- "data/merged_data.csv"
+write.csv(merged_data, file = file_path, row.names = FALSE)
+```
+There are **`r nrow(merged_data)`** observations and **`r ncol(merged_data)`** features.There are three people who are in the MCI baseline dataset, but not in the mci amyloid dataset. They only have the APOE, but don't have the time. However, all of them are showed in the merge table, maybe these three of them did not do the biomarkers test.
+
+
+
+
+
+
+
